@@ -106,11 +106,15 @@ else:
                 st.subheader("1. AI Geometry Analysis")
                 st.metric("Detected Cut Geometry", detected_shape, f"{confidence:.1f}% AI Confidence")
                 
+                # --- NEW: Geometric Edge-Case Logic ---
+                if detected_shape in ["Marquise", "Cushion"] and confidence < 95.0:
+                    st.warning(f"⚠️ Complex Geometry Detected ({detected_shape}). Confidence below strict 95% threshold due to optical edge-cases. Manual verification strongly recommended.")
+                
                 st.write("🤖 *Override System (Human-in-the-Loop)*")
-                override = st.checkbox("Enable Manual Grader Override")
                 all_shapes = ["Round", "Cushion", "Marquise", "Oval", "Emerald", "Pear", "Heart", "Princess", "Radiant"]
                 default_index = all_shapes.index(detected_shape) if detected_shape in all_shapes else 0
                 
+                override = st.checkbox("Enable Manual Grader Override")
                 if override:
                     final_shape = st.selectbox("Correct Shape:", all_shapes, index=default_index)
                     st.warning(f"Override Active: Using **{final_shape}**")
@@ -128,16 +132,27 @@ else:
                     clarity = st.selectbox("Clarity", ["IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2"])
                     
                 st.markdown("<br>", unsafe_allow_html=True)
+                
                 if st.button("Generate Surat Market Valuation", use_container_width=True, type="primary"):
-                    with st.spinner("Calculating live wholesale value..."):
-                        # Engine logic (mocked for robust demonstration)
-                        base_rate = 250000 
-                        color_mult = {'D': 1.2, 'E': 1.1, 'F': 1.0, 'G': 0.9, 'H': 0.8, 'I': 0.7, 'J': 0.6}
-                        clarity_mult = {'IF': 1.3, 'VVS1': 1.2, 'VVS2': 1.1, 'VS1': 1.0, 'VS2': 0.9, 'SI1': 0.8, 'SI2': 0.7}
-                        final_price = base_rate * (carat ** 1.2) * color_mult[color] * clarity_mult[clarity]
+                    with st.spinner("Calculating live wholesale value via XGBoost Engine..."):
+                        try:
+                            # --- NEW: Live XGBoost Inference ---
+                            # Standard label mapping matching your training pipeline
+                            color_map = {c: i for i, c in enumerate(['D', 'E', 'F', 'G', 'H', 'I', 'J'])}
+                            clarity_map = {c: i for i, c in enumerate(["IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2"])}
+                            cut_map = {s: i for i, s in enumerate(all_shapes)}
+                            
+                            # Build the feature vector
+                            features = np.array([[carat, cut_map.get(final_shape, 0), color_map[color], clarity_map[clarity]]])
+                            
+                            # Execute prediction using the loaded .pkl model
+                            final_price = float(price_engine.predict(features)[0])
+                            
+                            st.success("Valuation Complete")
+                            st.metric(label="Wholesale Valuation (INR)", value=f"₹ {final_price:,.2f}", delta="ML Prediction (XGBoost)")
                         
-                        st.success("Valuation Complete")
-                        st.metric(label="Wholesale Valuation (INR)", value=f"₹ {final_price:,.2f}", delta="-15% vs Retail")
+                        except Exception as e:
+                            st.error(f"Pricing Engine encountered an error: {e}")
 
     # ==========================================
     # MODE 2: BATCH PROCESSING DASHBOARD
